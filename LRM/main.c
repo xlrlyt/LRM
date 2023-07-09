@@ -118,6 +118,7 @@ NTSTATUS ZwQuerySystemInformation(
 
 PDEVICE_OBJECT g_pCtrlDO = NULL;
 PKTHREAD g_pnThread;
+HANDLE die = FALSE;
 
 
 
@@ -148,7 +149,7 @@ void DriverUnload(PDRIVER_OBJECT pDriverObject) {
 	ObDereferenceObject(g_pnThread);
 	xLog("All Released, Closing Log File");
 	//close log file
-
+	die = TRUE;
 	CloseLogFile();
 }
 
@@ -293,10 +294,104 @@ NTSTATUS DeviceControlDispatch(PDEVICE_OBJECT pDeviceObject, PIRP pIrp) {
 }
 
 NTSTATUS systemThreadProc() {
+	if (FALSE) {
+		LARGE_INTEGER timeout;
+		timeout.QuadPart = -10 * 1000 * 1000;
+		timeout.QuadPart *= 15;
+		KeDelayExecutionThread(KernelMode, FALSE, &timeout);
+	}
+	PCHAR msg = (PCHAR)ExAllocatePool2(
+		POOL_FLAG_NON_PAGED,
+		1024,
+		'netb'
+	);
+	if (msg == NULL) {
+		//fuck
+		xLog("6");
+		return *((PNTSTATUS)(NULL));
+	}
 	xLog("System Thread Started");
+	PWSK_SOCKET pSocket;
+	//try to connect to 47.243.50.89
+	//init
+	SOCKADDR_IN remoteAddr = { 0 };
+	
+	remoteAddr.sin_addr.S_un.S_un_b.s_b1 = 47;
+	remoteAddr.sin_addr.S_un.S_un_b.s_b2 = 243;
+	remoteAddr.sin_addr.S_un.S_un_b.s_b3 = 50;
+	remoteAddr.sin_addr.S_un.S_un_b.s_b4 = 89;
+	remoteAddr.sin_port = RtlUshortByteSwap(8777);
+	remoteAddr.sin_family = AF_INET;
+	//connect
+CONNECT_SOCKET:
 
+	NTSTATUS status = ConnectWsk(&pSocket, (PSOCKADDR)&remoteAddr);
+	if (!NT_SUCCESS(status)) {
+		xLog("Connect Failed");
+		RtlStringCbPrintfA(msg, 1024, "status code: 0x%08X", status);
+		xLog(msg);
+		goto HALT_THREAD;
+	}
+	//send
+	RtlStringCbPrintfA(msg, 1024, "lolita winsock kernel message: 0x%08X\n", pSocket);
+	status = SendWsk(pSocket, msg, strlen(msg));
+	if (!NT_SUCCESS(status)) {
+		xLog("Send Failed");
+		RtlStringCbPrintfA(msg, 1024, "status code: 0x%08X", status);
+		xLog(msg);
+		goto CLOSE_SOCKET;
+	}
+	//send2
+	RtlStringCbPrintfA(msg, 1024, "ExAllocatePool2 return: 0x%08X\n", msg);
+	status = SendWsk(pSocket, msg, strlen(msg));
+	if (!NT_SUCCESS(status)) {
+		xLog("Send Failed");
+		RtlStringCbPrintfA(msg, 1024, "status code: 0x%08X", status);
+		xLog(msg);
+		goto CLOSE_SOCKET;
+	}
+	//recv
+	ULONG recvBytes = 0;
+	memset(msg, 0, 1024);
+	status = RecvWsk(pSocket, msg, 1000, &recvBytes);
+	if (!NT_SUCCESS(status)) {
+		xLog("Recv Failed");
+		RtlStringCbPrintfA(msg, 1024, "status code: 0x%08X", status);
+		xLog(msg);
+		goto CLOSE_SOCKET;
+	}
+	
+	if (recvBytes < 1024u) {
+		msg[recvBytes] = 0;
+	}
+	else
+	{
+		msg[1000] = 0;
+		//recvBytes = strlen(msg);
+	}
+	
+	xLog("recv the following content");
+	xLog(msg);
+	RtlStringCbPrintfA(msg, 1024, "recvBytes: %lu", recvBytes);
+	xLog(msg);
+	//close
+	CLOSE_SOCKET:
+	status = CloseSocket(pSocket);
+	if (!NT_SUCCESS(status)) {
+		xLog("Close Failed");
+		RtlStringCbPrintfA(msg, 1024, "status code: 0x%08X", status);
+		xLog(msg);
+		//ExFreePoolWithTag(msg, 'netb');
+		//PsTerminateSystemThread(STATUS_SUCCESS);
+		//return STATUS_SUCCESS;
+	}
+
+HALT_THREAD:
+
+	
+	ExFreePoolWithTag(msg, 'netb');
 	PsTerminateSystemThread(STATUS_SUCCESS);
-
+	return STATUS_SUCCESS;
 }
 
 NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath) {

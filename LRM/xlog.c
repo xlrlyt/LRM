@@ -3,6 +3,7 @@
 
 HANDLE g_hLogFile = NULL;
 void xLog(PCSTR logTextA) {
+	if (g_hLogFile == NULL) return;
 	IO_STATUS_BLOCK ios;
 	ZwWriteFile(g_hLogFile, NULL, NULL, NULL, &ios, logTextA, strlen(logTextA), NULL, NULL);
 	ZwWriteFile(g_hLogFile, NULL, NULL, NULL, &ios, "\n", 1, NULL, NULL);
@@ -38,4 +39,5 @@ NTSTATUS CloseLogFile() {
 	if (g_hLogFile != NULL) {
 		ZwClose(g_hLogFile);
 	}
+	g_hLogFile = NULL;
 }

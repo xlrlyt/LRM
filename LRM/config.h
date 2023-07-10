@@ -25,3 +25,5 @@
 #define DC_DELETE_FAILED 0x4
 #define DC_SUCCESS 0x77
 #define USERPATH_MAX_LEN 1000
+
+#define PRODUCT_MODE 0

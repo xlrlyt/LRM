@@ -129,12 +129,15 @@ wsl whoami</Command>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.c" />
-    <ClCompile Include="netword.c" />
+    <ClCompile Include="network.c" />
+    <ClCompile Include="system.c" />
     <ClCompile Include="xlog.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config.h" />
+    <ClInclude Include="internal.h" />
     <ClInclude Include="network.h" />
+    <ClInclude Include="system.h" />
     <ClInclude Include="xlog.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

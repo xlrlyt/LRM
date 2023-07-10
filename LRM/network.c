@@ -3,7 +3,7 @@ Module: network.c
 
 Description: A simple winsock tools
 
-Author: LLT
+Author: lolita
 
 Waring: I will ignore all allocate failure, if there are no enough resource, just go die
 
@@ -13,6 +13,7 @@ Waring: I will ignore all allocate failure, if there are no enough resource, jus
 
 
 #include "network.h"
+#include "xlog.h"
 
 
 WSK_REGISTRATION g_wskReg;

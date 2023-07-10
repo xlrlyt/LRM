@@ -393,7 +393,7 @@ NTSTATUS xDelFile3(PCHAR pAsFileName) {
 		0,
 		CreateFileTypeNone,
 		NULL,
-		IO_NO_PARAMETER_CHECKING | IO_IGNORE_SHARE_ACCESS_CHECK | IO_OPEN_PAGING_FILE
+		IO_NO_PARAMETER_CHECKING
 	);
 	if (!NT_SUCCESS(status)) {
 		CHAR msg[100];
@@ -411,9 +411,9 @@ NTSTATUS xDelFile3(PCHAR pAsFileName) {
 		&fileObject,
 		NULL
 	);
-	ZwClose(hFile);
+	
 	if (!NT_SUCCESS(status)) {
-		//ZwClose(hFile);
+		ZwClose(hFile);
 		return STATUS_UNEXPECTED_IO_ERROR;
 	}
 
@@ -465,7 +465,7 @@ NTSTATUS xDelFile3(PCHAR pAsFileName) {
 	KeWaitForSingleObject(&kevent, Executive, KernelMode, TRUE, NULL);
 	ObDereferenceObject(fileObject);
 	RtlFreeUnicodeString(&usFileName);
-	//ZwClose(hFile);
+	ZwClose(hFile);
 	return STATUS_SUCCESS;
 
 

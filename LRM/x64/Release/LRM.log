@@ -1,6 +1,6 @@
 ﻿  Building 'LRM' with toolset 'WindowsKernelModeDriver10.0' and the 'Universal' target platform.
   Stamping x64\Release\LRM.inf
-  Stamping [Version] section with DriverVer=07/11/2023,1.20.59.811
+  Stamping [Version] section with DriverVer=07/11/2023,1.36.51.454
   main.c
   network.c
   system.c

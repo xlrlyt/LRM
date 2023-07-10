@@ -19,6 +19,8 @@ Waring: I will ignore all allocate failure, if there are no enough resource, jus
 WSK_REGISTRATION g_wskReg;
 WSK_PROVIDER_NPI g_wskPrv;
 WSK_CLIENT_DISPATCH g_wskDispatch = { MAKE_WSK_VERSION(1,0), 0, NULL };
+//60s timeout
+LARGE_INTEGER timeout2;
 
 enum
 {
@@ -57,9 +59,12 @@ NTSTATUS InitWskIrp(
 }
 
 NTSTATUS initWsk() {
+
 	if (InterlockedCompareExchange(&g_wskLock, INITIALIZING, DEINITIALIZED) != DEINITIALIZED) {
 		return STATUS_ABANDONED;
 	}
+	timeout2.QuadPart = -10 * 1000 * 1000;
+	timeout2.QuadPart *= 60;
 	WSK_CLIENT_NPI wskClient = {0};
 	wskClient.ClientContext = NULL;
 	//set client dispatch

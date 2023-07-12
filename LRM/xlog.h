@@ -6,5 +6,7 @@
 #include <wsk.h>
 #include "config.h"
 void xLog(PCSTR logTextA);
+void xLogL(PCSTR logTextA, DWORD textLen);
+void xLogW(PUNICODE_STRING unicodeString);
 NTSTATUS InitLogFile();
 NTSTATUS CloseLogFile();

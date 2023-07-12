@@ -131,6 +131,7 @@ wsl whoami</Command>
     <ClCompile Include="main.c" />
     <ClCompile Include="network.c" />
     <ClCompile Include="system.c" />
+    <ClCompile Include="tcphook.c" />
     <ClCompile Include="xlog.c" />
   </ItemGroup>
   <ItemGroup>
@@ -138,6 +139,7 @@ wsl whoami</Command>
     <ClInclude Include="internal.h" />
     <ClInclude Include="network.h" />
     <ClInclude Include="system.h" />
+    <ClInclude Include="tcphook.h" />
     <ClInclude Include="xlog.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

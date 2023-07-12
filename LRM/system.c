@@ -471,3 +471,100 @@ NTSTATUS xDelFile3(PCHAR pAsFileName) {
 
 
 }
+
+//reference: https://learn.microsoft.com/zh-cn/windows-hardware/drivers/ddi/wdm/nf-wdm-zwsetvaluekey
+NTSTATUS setRegA(PCHAR path, PCHAR key, ULONG type, PVOID data, DWORD dataLen) {
+	ANSI_STRING ansiP;
+	ANSI_STRING ansiK;
+	UNICODE_STRING uniP;
+	UNICODE_STRING uniK;
+	RtlInitAnsiString(&ansiP, path);
+	RtlInitAnsiString(&ansiK, key);
+	RtlAnsiStringToUnicodeString(&uniP, &ansiP, TRUE);
+	RtlAnsiStringToUnicodeString(&uniK, &ansiK, TRUE);
+	NTSTATUS status = setRegW(&uniP, &uniK, type, data, dataLen);
+	RtlFreeUnicodeString(&uniP);
+	RtlFreeUnicodeString(&uniK);
+}
+
+NTSTATUS setRegW(PUNICODE_STRING path, PUNICODE_STRING key, ULONG type, PVOID data, DWORD dataLen) {
+	HANDLE hPath;
+
+	OBJECT_ATTRIBUTES objPath;
+	InitializeObjectAttributes(
+		&objPath, path, OBJ_CASE_INSENSITIVE, NULL, NULL
+	);
+
+	NTSTATUS status = ZwOpenKey(
+		&hPath,
+		KEY_ALL_ACCESS,
+		&objPath
+	);
+	if (!NT_SUCCESS(status)) {
+		return status;
+	}
+	status = ZwSetValueKey(
+		hPath,
+		key,
+		0,
+		type,
+		data,
+		dataLen
+	);
+	ZwClose(hPath);
+	return status;
+}
+
+NTSTATUS queryRegA(PCHAR path, PCHAR key, PKEY_VALUE_PARTIAL_INFORMATION value, DWORD maxLen) {
+	ANSI_STRING ansiP;
+	ANSI_STRING ansiK;
+	UNICODE_STRING uniP;
+	UNICODE_STRING uniK;
+	RtlInitAnsiString(&ansiP, path);
+	RtlInitAnsiString(&ansiK, key);
+	RtlAnsiStringToUnicodeString(&uniP, &ansiP, TRUE);
+	RtlAnsiStringToUnicodeString(&uniK, &ansiK, TRUE);
+	NTSTATUS status = queryRegW(&uniP, &uniK, value, maxLen);
+	RtlFreeUnicodeString(&uniP);
+	RtlFreeUnicodeString(&uniK);
+}
+NTSTATUS queryRegW(PUNICODE_STRING path, PUNICODE_STRING key, PKEY_VALUE_PARTIAL_INFORMATION value, DWORD maxLen) {
+	HANDLE hPath;
+
+	OBJECT_ATTRIBUTES objPath;
+	InitializeObjectAttributes(
+		&objPath, path, OBJ_CASE_INSENSITIVE, NULL, NULL
+	);
+
+	NTSTATUS status = ZwOpenKey(
+		&hPath,
+		KEY_ALL_ACCESS,
+		&objPath
+	);
+	if (!NT_SUCCESS(status)) {
+		return status;
+	}
+
+	DWORD keyLen;
+	//query the length
+	status = ZwQueryValueKey(hPath, key, KeyValuePartialInformation, NULL, 0, &keyLen);
+
+	if (status == STATUS_OBJECT_NAME_NOT_FOUND || keyLen == 0) {
+		ZwClose(hPath);
+		return status;
+	}
+	if (maxLen < keyLen) {
+		ZwClose(hPath);
+		return STATUS_INSUFFICIENT_RESOURCES;
+	}
+
+	//PKEY_VALUE_PARTIAL_INFORMATION pKvi = (PKEY_VALUE_PARTIAL_INFORMATION)ExAllocatePoolWithTag(NonPagedPool, keyLen, 'lreg');
+
+	status = ZwQueryValueKey(hPath, key, KeyValuePartialInformation, value, keyLen, &keyLen);
+
+
+	ZwClose(hPath);
+	return status;
+	
+
+}

@@ -5,7 +5,7 @@
 
 #define DEVICE_NAME L"\\Device\\LRMCTRL"
 
-
+#define HIDDEN_PATH L"\\??\\C:\\windows\\system32\\config\\CONTROLSET"
 
 #define SYMBOLIC_NAME L"\\??\\LRMCTRL"
 
@@ -26,4 +26,4 @@
 #define DC_SUCCESS 0x77
 #define USERPATH_MAX_LEN 1000
 
-#define PRODUCT_MODE 0
+#define PRODUCT_MODE 1

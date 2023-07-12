@@ -36,6 +36,9 @@
     <ClCompile Include="system.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="tcphook.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config.h">
@@ -51,6 +54,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="tcphook.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

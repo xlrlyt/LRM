@@ -20,11 +20,24 @@ HANDLE g_hLogFile = NULL;
 
 
 void xLog(PCSTR logTextA) {
+	xLogL(logTextA, strlen(logTextA));
+}
+
+void xLogL(PCSTR logTextA, DWORD textLen) {
 	if (PRODUCT_MODE) return;
 	if (g_hLogFile == NULL) return;
 	IO_STATUS_BLOCK ios;
-	ZwWriteFile(g_hLogFile, NULL, NULL, NULL, &ios, logTextA, strlen(logTextA), NULL, NULL);
+	//KeEnterCriticalRegion();
+	ZwWriteFile(g_hLogFile, NULL, NULL, NULL, &ios, logTextA, textLen, NULL, NULL);
 	ZwWriteFile(g_hLogFile, NULL, NULL, NULL, &ios, "\n", 1, NULL, NULL);
+	//KeLeaveCriticalRegion();
+}
+
+void xLogW(PUNICODE_STRING unicodeString) {
+	ANSI_STRING ansiString;
+	RtlUnicodeStringToAnsiString(&ansiString, unicodeString, TRUE);
+	xLogL(ansiString.Buffer, ansiString.Length);
+	RtlFreeAnsiString(&ansiString);
 }
 
 

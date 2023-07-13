@@ -3,7 +3,7 @@ Inf2Cat Tool Output:
 Signability test failed.
 
 Errors:
-22.9.7: DriverVer set to a date in the future (postdated DriverVer not allowed) in LRM\lrm.inf.
+22.9.1: wdfcoinstaller01009.dll in [lrm_device_coinstaller_copyfiles] of LRM\lrm.inf is missing or cannot be decompressed from source media.  Please verify all path values specified in SourceDisksNames, SouceDisksFiles, and CopyFiles sections resolve to the actual location of the file, and are expressed in terms relative to the location of the inf.
 
 Warnings:
 None

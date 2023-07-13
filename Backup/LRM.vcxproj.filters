@@ -27,13 +27,16 @@
     <ClCompile Include="main.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="xlog.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="network.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="system.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="xlog.c">
+    <ClCompile Include="tcphook.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -41,16 +44,19 @@
     <ClInclude Include="config.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="internal.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="network.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="system.h">
+    <ClInclude Include="xlog.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="xlog.h">
+    <ClInclude Include="internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="tcphook.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="system.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

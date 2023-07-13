@@ -8,7 +8,7 @@ Class=System ; TODO: specify appropriate Class
 ClassGuid={4d36e97d-e325-11ce-bfc1-08002be10318} ; TODO: specify appropriate ClassGuid
 Provider=%ManufacturerName%
 CatalogFile=LRM.cat
-DriverVer = 07/13/2023,2.54.52.931
+DriverVer = 07/13/2023,21.59.56.745
 PnpLockdown=1
 
 [DestinationDirs]
@@ -20,8 +20,7 @@ LRM_Device_CoInstaller_CopyFiles = 11
 
 [SourceDisksFiles]
 LRM.sys  = 1,,
-;
-
+WdfCoInstaller01009.dll=1 ; make sure the number matches with SourceDisksNames
 
 ;*****************************************
 ; Install Section
@@ -60,17 +59,15 @@ AddReg=LRM_Device_CoInstaller_AddReg
 CopyFiles=LRM_Device_CoInstaller_CopyFiles
 
 [LRM_Device_CoInstaller_AddReg]
-;
-
+HKR,,CoInstallers32,0x00010000, "WdfCoInstaller01009.dll,WdfCoInstaller"
 
 [LRM_Device_CoInstaller_CopyFiles]
-;
-
+WdfCoInstaller01009.dll
 
 [LRM_Device.NT.Wdf]
 KmdfService =  LRM, LRM_wdfsect
 [LRM_wdfsect]
-KmdfLibraryVersion = 1.15
+KmdfLibraryVersion = 1.9
 
 [Strings]
 SPSVCINST_ASSOCSERVICE= 0x00000002

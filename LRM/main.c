@@ -529,7 +529,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	if (!NT_SUCCESS(status)) {
 		DbgPrint("Device create failed?????? Unscience");
 		CloseLogFile();
-		return STATUS_SUCCESS;
+		//return STATUS_SUCCESS;
 		return status;
 	}
 	g_pCtrlDO->Flags |= DO_BUFFERED_IO;
@@ -541,7 +541,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 		IoDeleteDevice(g_pCtrlDO);
 		g_pCtrlDO = NULL;
 		CloseLogFile();
-		return STATUS_SUCCESS;
+		//return STATUS_SUCCESS;
 		return status;
 	}
 
@@ -796,7 +796,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 
 	xLog("DriverEntry Finished");
 	//InstallHook();
-	return STATUS_SUCCESS;
+	//return STATUS_SUCCESS;
 	return status;
 }
 

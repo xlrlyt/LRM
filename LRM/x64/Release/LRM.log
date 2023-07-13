@@ -1,11 +1,7 @@
 ﻿  Building 'LRM' with toolset 'WindowsKernelModeDriver10.0' and the 'Desktop' target platform.
   Stamping x64\Release\LRM.inf
-  Stamping [Version] section with DriverVer=07/14/2023,1.1.35.708
+  Stamping [Version] section with DriverVer=07/14/2023,1.28.41.946
   main.c
-  network.c
-  system.c
-  xlog.c
-  正在生成代码...
   LRM.vcxproj -> D:\LRM\LRM\x64\Release\LRM.sys
   Done Adding Additional Store
   Successfully signed: D:\LRM\LRM\x64\Release\LRM.sys
@@ -97,7 +93,7 @@
   VSAPPIDNAME=devenv.exe
   VSLANG=2052
   VSSKUEDITION=Enterprise
-  VSTEL_CurrentSolutionBuildID=18017062
+  VSTEL_CurrentSolutionBuildID=19643046
   VSTEL_ProjectID={83FC9789-7A19-4046-A3D4-32D14E16249B}
   VSTEL_SolutionSessionID={3C7DC021-5D1B-46C4-8411-48D9B0C4D78E}
   WEBIDE_VM_OPTIONS=D:\jetbra\vmoptions\webide.vmoptions

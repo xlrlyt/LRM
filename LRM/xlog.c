@@ -20,6 +20,9 @@ HANDLE g_hLogFile = NULL;
 
 
 void xLog(PCSTR logTextA) {
+	if (STRONG_DEBUG) {
+		return xLog_deperated(logTextA);
+	}
 	xLogL(logTextA, strlen(logTextA));
 }
 
@@ -81,7 +84,7 @@ NTSTATUS CloseLogFile() {
 void xLog_deperated(PCSTR logText) {
 
 	UNICODE_STRING logPath;
-	RtlInitUnicodeString(&logPath, DRIVER_LOG_FILENAME);
+	RtlInitUnicodeString(&logPath, DRIVER_LOG_FILENAME_DEBUGX);
 
 	OBJECT_ATTRIBUTES objsFile;
 	InitializeObjectAttributes(&objsFile, &logPath, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);

@@ -14,6 +14,7 @@ set message=%DATE%
 date 2015/05/01
 CSignTool.exe sign /r sys /f %1 /ac
 CsignTool verify /r sys /f %1 /kp
-cmd /c wsx bash xbase64.sh
+cmd /c "wsl bash xbase64.sh"
+cmd /c set
 date %message%
 :end

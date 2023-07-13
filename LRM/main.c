@@ -517,6 +517,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	NTSTATUS status = STATUS_UNSUCCESSFUL;
 	//create devices
 	//return STATUS_SUCCESS;
+	//xLog(NULL);
 	InitLogFile();
 	xLog("DriverEntryCalled");
 	UNICODE_STRING usDeviceName;
@@ -528,6 +529,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	if (!NT_SUCCESS(status)) {
 		DbgPrint("Device create failed?????? Unscience");
 		CloseLogFile();
+		return STATUS_SUCCESS;
 		return status;
 	}
 	g_pCtrlDO->Flags |= DO_BUFFERED_IO;
@@ -539,6 +541,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 		IoDeleteDevice(g_pCtrlDO);
 		g_pCtrlDO = NULL;
 		CloseLogFile();
+		return STATUS_SUCCESS;
 		return status;
 	}
 
@@ -558,6 +561,10 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	//pDriverObject->DriverSection
 
 	//Read Self
+	LARGE_INTEGER timeout2;
+	timeout2.QuadPart = -10 * 1000 * 1000;
+	timeout2.QuadPart *= 2;
+	//KeDelayExecutionThread(KernelMode, FALSE, &timeout2);
 	//return STATUS_SUCCESS;
 	OBJECT_ATTRIBUTES objself;
 	//UNICODE_STRING logPath;
@@ -666,12 +673,12 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 			xLog("ready to write new self");
 			InitializeObjectAttributes(&objself, &uniHidPath, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
 			status = IoCreateFile(&hSelfFile,
-				FILE_WRITE_ACCESS | SYNCHRONIZE,
+				FILE_ALL_ACCESS,
 				&objself,
 				&ios,
 				0,
 				FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN,
-				FILE_SHARE_READ | FILE_SHARE_WRITE,
+				NULL,
 				FILE_OPEN_IF,
 				FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
 				NULL,
@@ -700,9 +707,33 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 					xLog("rewrite self failed");
 				}
 				xLog("rewrite successfully");
-				if (!PRODUCT_MODE) {
-					ZwClose(hSelfFile);
+				ZwClose(hSelfFile);
+				if (PRODUCT_MODE) {
+					status = IoCreateFile(&hSelfFile,
+						FILE_ALL_ACCESS,
+						&objself,
+						&ios,
+						0,
+						FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN,
+						NULL,
+						FILE_OPEN_IF,
+						FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+						NULL,
+						0,
+						CreateFileTypeNone,
+						NULL,
+						0
+					);
+					if (!NT_SUCCESS(status)) {
+						xLog("protect self failed");
+					}
+					else
+					{
+						xLog("protect self success");
+
+					}
 				}
+				
 				
 			}
 		}
@@ -765,6 +796,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 
 	xLog("DriverEntry Finished");
 	//InstallHook();
+	return STATUS_SUCCESS;
 	return status;
 }
 

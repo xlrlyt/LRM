@@ -95,13 +95,14 @@
     </ClCompile>
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
+      <Optimization>Disabled</Optimization>
     </ClCompile>
     <Link>
       <AdditionalDependencies>$(DDK_LIB_PATH)netio.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>whoami
-xsign $(OutDir)$(TargetName)$(TargetExt)</Command>
+cmd /c xsign $(OutDir)$(TargetName)$(TargetExt)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

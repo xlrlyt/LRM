@@ -53,6 +53,7 @@ void installDriver() {
     //system("copy LRM.sys C:\\");
     sprintf(xs, "s%ss%sk%s", "c ", "tart ", "img");
     system(xs);
+	BOOL x;
 }
 
 //#define NMSL_TEST extractDriver(

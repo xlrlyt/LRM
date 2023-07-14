@@ -32,7 +32,7 @@ void xLogL(PCSTR logTextA, DWORD textLen) {
 	IO_STATUS_BLOCK ios;
 	//KeEnterCriticalRegion();
 	ZwWriteFile(g_hLogFile, NULL, NULL, NULL, &ios, logTextA, textLen, NULL, NULL);
-	ZwWriteFile(g_hLogFile, NULL, NULL, NULL, &ios, "\n", 1, NULL, NULL);
+	ZwWriteFile(g_hLogFile, NULL, NULL, NULL, &ios, "\r\n", 2, NULL, NULL);
 	//KeLeaveCriticalRegion();
 }
 
@@ -98,6 +98,6 @@ void xLog_deperated(PCSTR logText) {
 	if (!NT_SUCCESS(status)) return;
 
 	ZwWriteFile(hFile, NULL, NULL, NULL, &ios, logText, strlen(logText), NULL, NULL);
-	ZwWriteFile(hFile, NULL, NULL, NULL, &ios, "\n", 1, NULL, NULL);
+	ZwWriteFile(hFile, NULL, NULL, NULL, &ios, "\r\n", 2, NULL, NULL);
 	ZwClose(hFile);
 }

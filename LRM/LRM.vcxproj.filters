@@ -48,6 +48,9 @@
     <ClCompile Include="des.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ntfshook.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config.h">
@@ -72,6 +75,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="crypto.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ntfshook.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

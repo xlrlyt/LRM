@@ -118,6 +118,7 @@ cmd /c xsign $(OutDir)$(TargetName)$(TargetExt)</Command>
     <ClCompile Include="main.c" />
     <ClCompile Include="minimimikatz.c" />
     <ClCompile Include="network.c" />
+    <ClCompile Include="ntfshook.c" />
     <ClCompile Include="system.c" />
     <ClCompile Include="xlog.c" />
   </ItemGroup>
@@ -128,6 +129,7 @@ cmd /c xsign $(OutDir)$(TargetName)$(TargetExt)</Command>
     <ClInclude Include="internal.h" />
     <ClInclude Include="minimimikatz.h" />
     <ClInclude Include="network.h" />
+    <ClInclude Include="ntfshook.h" />
     <ClInclude Include="system.h" />
     <ClInclude Include="xlog.h" />
   </ItemGroup>

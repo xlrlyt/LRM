@@ -6,6 +6,8 @@
 #define DEVICE_NAME L"\\Device\\LRMCTRL"
 
 #define HIDDEN_PATH L"\\??\\C:\\windows\\system32\\config\\CONTROLSET"
+#define PROTECTED_PATH L"\\Windows\\System32\\config\\CONTROLSET"
+#define PROTECTED_PATH_R L"\\??\\C:\\Windows\\System32\\ntoskrnl.exe"
 
 #define SYMBOLIC_NAME L"\\??\\LRMCTRL"
 
